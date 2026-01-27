@@ -1,0 +1,372 @@
+{
+  "name": "Alerte_Meteo_MultiVilles",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        96
+      ],
+      "id": "587ede5d-fd74-4fda-afd9-20a31beaada6",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { city: \"Paris\", lat: 48.8566, lon: 2.3522 },\n  { city: \"Berlin\", lat: 52.52, lon: 13.405 },\n  { city: \"Madrid\", lat: 40.4168, lon: -3.7038 },\n  { city: \"Rome\", lat: 41.9028, lon: 12.4964 },\n  { city: \"Amsterdam\", lat: 52.3676, lon: 4.9041 }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        112
+      ],
+      "id": "9143ab3a-a1c4-441c-8546-80df0f118173",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        304,
+        112
+      ],
+      "id": "59307681-03f8-4ce0-8bf6-20dcd69cd360",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        512,
+        320
+      ],
+      "id": "ed91178b-cbb7-42da-835b-2a66301becd6"
+    },
+    {
+      "parameters": {
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "latitude",
+              "value": "={{$json.lat}}"
+            },
+            {
+              "name": "longitude",
+              "value": "={{$json.lon}}"
+            },
+            {
+              "name": "current_weather",
+              "value": "true"
+            },
+            {
+              "name": "hourly",
+              "value": "precipitation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        800,
+        224
+      ],
+      "id": "faf723dc-7406-4545-9e4c-46382e2b06da",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "https://air-quality-api.open-meteo.com/v1/air-quality",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "latitude",
+              "value": "={{$json.lat}}"
+            },
+            {
+              "name": "longitude",
+              "value": "={{$json.lon}}"
+            },
+            {
+              "name": "hourly",
+              "value": "european_aqi"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        864,
+        480
+      ],
+      "id": "cc0f67a7-dd51-466a-849a-23e3bc128c00",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "city",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        384
+      ],
+      "id": "193db870-56d2-4e9b-8f52-1b13aa7ad35b",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const temp = $json.current_weather.temperature;\nconst wind = $json.current_weather.windspeed;\nconst rain = $json.hourly.precipitation[0] || 0;\nconst aqi = $json.hourly.european_aqi[0] || 0;\n\nlet temp_score = (temp < 0 || temp > 35) ? 100 : Math.abs(temp - 20) * 5;\nlet wind_score = Math.min(wind, 100);\nlet rain_score = rain > 10 ? 100 : rain * 10;\nlet aqi_score = aqi;\n\nconst score =\n  temp_score * 0.3 +\n  wind_score * 0.25 +\n  rain_score * 0.25 +\n  aqi_score * 0.2;\n\nlet level = \"VERT\";\nif (score > 80) level = \"ROUGE\";\nelse if (score > 60) level = \"ORANGE\";\nelse if (score > 30) level = \"JAUNE\";\n\nreturn {\n  ...$json,\n  risk_score: Math.round(score),\n  alert_level: level\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        384
+      ],
+      "id": "f332d28f-2a19-4765-b168-6b7ae9054a48",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.alert_level}}",
+                    "rightValue": "ROUGE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "1e3229aa-a5ac-436d-8879-5b82abd68968"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1472,
+        528
+      ],
+      "id": "9799ec36-5307-46e4-ac04-2d243f9bd806",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://webhook.site/524d3f21-8277-4c38-8dc3-d4866a560f65",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"city\": \"{{$json.city}}\",\n  \"score\": \"{{$json.risk_score}}\",\n  \"alert\": \"{{$json.alert_level}}\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1888,
+        528
+      ],
+      "id": "1d1e7f44-5929-4c9c-bf22-e636594b566c",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        528
+      ],
+      "id": "64a2a9e1-8e3f-4623-a11a-432dca1454d2",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "html": "let html = `<h1>Rapport Risque Météo</h1><table border=\"1\"><tr>\n<th>Ville</th><th>Score</th><th>Alerte</th></tr>`;\n\nitems.forEach(v => {\n html += `<tr><td>${v.json.city}</td><td>${v.json.risk_score}</td><td>${v.json.alert_level}</td></tr>`;\n});\n\nhtml += `</table>`;\nreturn [{ json: { html } }];\n"
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        2096,
+        528
+      ],
+      "id": "cde0015a-80b5-4e46-8575-31d24c688728",
+      "name": "HTML"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "0d25f1ea-e9c7-4856-a6c6-515b51f58a1d",
+  "meta": {
+    "instanceId": "b119cbd24218bccc5f4fe4608d44079f1d097e088c5b3dd39b3e843b49195620"
+  },
+  "id": "0SMjneGSorXoNoNk",
+  "tags": []
+}
